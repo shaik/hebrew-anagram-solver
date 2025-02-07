@@ -21,9 +21,10 @@ solver = AnagramSolver(dictionary)
 
 # In-memory cache for pagination
 class SolutionCache:
-    def __init__(self, letters: str, max_words: int):
+    def __init__(self, letters: str, max_words: int, mhw: Optional[str] = None):
         self.letters = letters
         self.max_words = max_words
+        self.mhw = mhw
         self.solutions: List[List[str]] = []
         self.generator: Optional[Iterator[List[str]]] = None
         self.is_complete = False
@@ -35,7 +36,7 @@ class SolutionCache:
             return True
             
         if self.generator is None:
-            self.generator = solver.find_anagrams(self.letters, self.max_words)
+            self.generator = solver.find_anagrams(self.letters, self.max_words, self.mhw)
             
         try:
             while len(self.solutions) < count:
@@ -109,13 +110,25 @@ def solve():
         if not letters and not search_id:
             return jsonify({'error': 'No input provided'}), 400
             
+        # Get optional must-have word parameter
+        mhw = data.get('mhw')
+        if mhw:
+            mhw = mhw.strip()
+            if not mhw:  # If it's just whitespace, treat as None
+                mhw = None
+                
         # Get or create cache for this search
         if search_id and search_id in solution_caches:
             cache = solution_caches[search_id]
         else:
             search_id = str(uuid.uuid4())
-            cache = SolutionCache(letters, max_words)
-            solution_caches[search_id] = cache
+            try:
+                cache = SolutionCache(letters, max_words, mhw)
+                solution_caches[search_id] = cache
+            except ValueError as e:
+                return jsonify({
+                    'error': 'המילה חייבת להיות מורכבת מהאותיות שהוזנו'
+                }), 400
             
         # Calculate required number of solutions
         required_solutions = page * per_page
@@ -143,7 +156,17 @@ def solve():
             'elapsed_ms': int((time() - start_time) * 1000)
         })
         
+    except ValueError as e:
+        # Handle validation errors (like invalid must-have word)
+        error_msg = str(e)
+        if 'Must-have word contains letters not present in input' in error_msg:
+            return jsonify({
+                'error': 'המילה חייבת להיות מורכבת מהאותיות שהוזנו'
+            }), 400
+        return jsonify({'error': error_msg}), 400
+        
     except Exception as e:
+        # Handle other unexpected errors
         app.logger.error(f"Error solving anagram: {str(e)}")
         return jsonify({'error': str(e)}), 500
 

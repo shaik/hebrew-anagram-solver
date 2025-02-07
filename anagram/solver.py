@@ -137,7 +137,7 @@ class AnagramSolver:
                     ):
                         yield (word,) + sub_solution
     
-    def find_anagrams(self, letters: str, max_words: int = 5) -> Iterator[Solution]:
+    def find_anagrams(self, letters: str, max_words: int = 5, must_have_word: Optional[str] = None) -> Iterator[Solution]:
         """
         Lazily generate all valid multi-word anagrams for the given letters.
         
@@ -145,29 +145,65 @@ class AnagramSolver:
         the need to compute and store all solutions at once. It uses the
         _find_anagrams_generator helper which implements the core recursive logic.
         
+        If must_have_word is provided, it will be included in every solution and
+        the remaining letters will be used to generate additional words.
+        
         Performance optimizations:
         1. Input normalization and frequency map computation done once up front
         2. Generator-based lazy evaluation to avoid storing all solutions in memory
         3. Early filtering of single-word solutions that match the input
         4. Precomputed word frequency maps from __init__
+        5. Efficient handling of must-have word by subtracting its frequency map
         
         Args:
             letters: Input string of Hebrew letters
             max_words: Maximum number of words in each anagram
+            must_have_word: Optional word that must appear in every solution
             
         Yields:
             Each anagram solution as a list of words, one at a time
+            
+        Raises:
+            ValueError: If must_have_word is provided but its letters are not a subset
+                      of the input letters (considering frequencies)
         """
         # Remove spaces and normalize the input once
         normalized = self.dictionary.normalize_word(letters.replace(' ', ''))
         target_freq = self.dictionary.get_word_frequency_map(normalized)
-        target_tuple = self._freq_map_to_tuple(target_freq)
         
-        # Use the generator to yield solutions one at a time
-        # This is memory efficient as it only keeps one solution in memory at a time
-        for solution in self._find_anagrams_generator(target_tuple, max_words):
-            # Skip solutions that are just the original input
-            # This avoids returning trivial solutions
-            if len(solution) == 1 and self.dictionary.normalize_word(solution[0]) == normalized:
-                continue
-            yield list(solution)
+        # If must_have_word is provided, validate and subtract its letters
+        if must_have_word:
+            # Normalize the must-have word
+            mhw_normalized = self.dictionary.normalize_word(must_have_word.strip())
+            mhw_freq = self.dictionary.get_word_frequency_map(mhw_normalized)
+            
+            # Verify that must_have_word's letters are a subset of input letters
+            for char, freq in mhw_freq.items():
+                if char not in target_freq or target_freq[char] < freq:
+                    raise ValueError('Must-have word contains letters not present in input')
+            
+            # Subtract must_have_word's letters from target frequency map
+            remaining_freq = {}
+            for char, freq in target_freq.items():
+                remaining = freq - mhw_freq.get(char, 0)
+                if remaining > 0:
+                    remaining_freq[char] = remaining
+            
+            # Convert remaining frequency map to tuple for generator
+            target_tuple = self._freq_map_to_tuple(remaining_freq)
+            
+            # Generate solutions for remaining letters and append must_have_word
+            for solution in self._find_anagrams_generator(target_tuple, max_words - 1):
+                # Skip solutions that are just the original input minus must_have_word
+                if len(solution) == 1 and self.dictionary.normalize_word(solution[0]) == self.dictionary.normalize_word(''.join(remaining_freq.keys())):
+                    continue
+                # Append must_have_word to each solution
+                yield list(solution) + [must_have_word]
+        else:
+            # Standard case without must_have_word
+            target_tuple = self._freq_map_to_tuple(target_freq)
+            for solution in self._find_anagrams_generator(target_tuple, max_words):
+                # Skip solutions that are just the original input
+                if len(solution) == 1 and self.dictionary.normalize_word(solution[0]) == normalized:
+                    continue
+                yield list(solution)

@@ -55,6 +55,8 @@ This iterative process of using ChatGPT to refine prompts for Windsurf resulted 
 - Finds all possible combinations of Hebrew words that form anagrams
 - Handles Hebrew final letter forms (ך, ם, ן, ף, ץ)
 - Modern, responsive web interface with RTL support
+- Support for must-have word in solutions (יש להחזיר צרופים המכילים את המילה)
+- Lazy evaluation and server-side pagination for efficient memory usage
 - RESTful API endpoint for programmatic access
 - Comprehensive test suite
 - Easy deployment to Heroku
@@ -96,12 +98,61 @@ pytest
 
 ## API Usage
 
-The application provides a REST API endpoint at `/solve`:
+The application provides a REST API endpoint at `/solve` that accepts POST requests with JSON data:
+
+```json
+{
+    "letters": "שלוםעולם",    // Required: Input letters
+    "max_words": 4,         // Optional: Maximum words per solution (default: 4)
+    "mhw": "שלום",         // Optional: Must-have word to include in solutions
+    "page": 1,             // Optional: Page number for pagination (default: 1)
+    "per_page": 50,        // Optional: Results per page (default: 50, max: 100)
+    "search_id": null      // Optional: ID from previous search for pagination
+}
+```
+
+Example response:
+
+```json
+{
+    "solutions": [          // Array of solutions for current page
+        ["שלום", "עולם"],
+        ["שלום", "על", "ום"]
+    ],
+    "total_found": 42,      // Total number of solutions found
+    "is_complete": false,   // Whether all solutions have been generated
+    "page": 1,             // Current page number
+    "per_page": 50,        // Results per page
+    "search_id": "...",    // Use this ID for subsequent page requests
+    "elapsed_ms": 123      // Time taken to process request
+}
+```
+
+Error responses will have a 400 or 500 status code and include an error message:
+
+```json
+{
+    "error": "המילה חייבת להיות מורכבת מהאותיות שהוזנו"
+}
+```
+
+Example usage with curl:
 
 ```bash
+# Basic search
 curl -X POST http://localhost:5000/solve \
-  -H "Content-Type: application/json" \
-  -d '{"letters": "שלום", "max_words": 3}'
+     -H "Content-Type: application/json" \
+     -d '{"letters": "שלוםעולם", "max_words": 4}'
+
+# Search with must-have word
+curl -X POST http://localhost:5000/solve \
+     -H "Content-Type: application/json" \
+     -d '{"letters": "שלוםעולם", "max_words": 4, "mhw": "שלום"}'
+
+# Paginated search
+curl -X POST http://localhost:5000/solve \
+     -H "Content-Type: application/json" \
+     -d '{"letters": "שלוםעולם", "max_words": 4, "page": 2, "per_page": 10}'
 ```
 
 Response format:
