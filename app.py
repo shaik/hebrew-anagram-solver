@@ -35,7 +35,9 @@ def solve():
     try:
         data = request.get_json()
         letters = data.get('letters', '').strip()
-        max_words = int(data.get('max_words', 5))
+        # Limit max_words to 4
+        requested_max_words = int(data.get('max_words', 4))
+        max_words = min(requested_max_words, 4)  # Ensure it never exceeds 4
         
         if not letters:
             return jsonify({'error': 'No input provided'}), 400
