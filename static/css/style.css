@@ -1,0 +1,55 @@
+/* Custom styles for Hebrew Anagram Solver */
+body {
+    background-color: #f8f9fa;
+}
+
+.card {
+    border-radius: 15px;
+    border: none;
+}
+
+.card-body {
+    padding: 2rem;
+}
+
+.form-control {
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    font-size: 1.1rem;
+}
+
+.form-control:focus {
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+}
+
+.btn-primary {
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.15);
+}
+
+.list-group-item {
+    border-radius: 8px !important;
+    margin-bottom: 0.5rem;
+    border: 1px solid rgba(0, 0, 0, 0.125);
+    padding: 1rem;
+    font-size: 1.1rem;
+    transition: all 0.2s ease;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa;
+    transform: translateX(-5px);
+}
+
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+    margin: 2rem 0;
+}
