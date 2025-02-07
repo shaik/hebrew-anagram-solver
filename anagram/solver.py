@@ -9,7 +9,7 @@ Performance optimizations include:
 4. Efficient data structures for frequency maps
 5. Proper handling of all valid solutions including single-word anagrams
 """
-from typing import List, Dict, Set, Tuple, Optional, FrozenSet
+from typing import List, Dict, Set, Tuple, Optional, FrozenSet, Iterator
 from functools import lru_cache
 from collections import Counter
 from .dictionary import HebrewDictionary
@@ -33,13 +33,16 @@ class AnagramSolver:
         # Filter out single-letter words and store remaining words
         self._dictionary_words = [word for word in dictionary.words if len(word) > 1]
         
-        # Precompute frequency maps for all valid words
+        # Precompute frequency maps for all valid words for better performance
+        # This is a key optimization that avoids recomputing frequency maps repeatedly
         self._word_freq_maps: Dict[str, FreqMap] = {}
         for word in self._dictionary_words:
             self._word_freq_maps[word] = self.dictionary.get_word_frequency_map(word)
-        
-        # Create a static helper function with lru_cache for memoization
-        self._find_anagrams_helper = lru_cache(maxsize=10000)(self._find_anagrams_helper_impl)
+            
+        # Note: We previously used LRU caching with _find_anagrams_helper, but have
+        # switched to a pure generator-based approach for better memory efficiency
+        # and simpler code. The precomputed frequency maps above provide sufficient
+        # optimization for our use case.
 
     @staticmethod
     def _freq_map_to_tuple(freq_map: FreqMap) -> FreqMapTuple:
@@ -95,21 +98,28 @@ class AnagramSolver:
                 return False
         return True
 
-    def _find_anagrams_helper_impl(self, remaining_freq_tuple: FreqMapTuple, words_limit: int) -> FrozenSet[Tuple[str, ...]]:
+    def _find_anagrams_generator(self, remaining_freq_tuple: FreqMapTuple, words_limit: int) -> Iterator[Tuple[str, ...]]:
         """
-        Helper function that does the actual recursive search with memoization.
-        Returns a frozenset of solutions (as tuples) for the given state.
+        Generator function that lazily yields anagram solutions.
+        This is the core recursive function that generates solutions without storing them all in memory.
+        
+        Args:
+            remaining_freq_tuple: Remaining letters as a frequency map tuple
+            words_limit: Maximum number of words allowed in solutions
+            
+        Yields:
+            Each valid solution as a tuple of words
         """
         if not remaining_freq_tuple:  # Found a solution
-            return frozenset([()])  # Empty tuple represents a complete solution
+            yield tuple()
+            return
             
         if words_limit <= 0:  # No more words allowed
-            return frozenset()
+            return
             
         remaining_freq = dict(remaining_freq_tuple)
         remaining_letters = sum(count for _, count in remaining_freq_tuple)
         
-        solutions = set()
         # Try each word in the dictionary
         for word in self._dictionary_words:
             # Skip words that are too long
@@ -120,50 +130,44 @@ class AnagramSolver:
             if self.is_freq_map_subset(word_freq, remaining_freq):
                 new_freq = self.subtract_freq_maps(remaining_freq, word_freq)
                 if new_freq is not None:
-                    # Recursively find solutions for remaining letters
-                    sub_solutions = self._find_anagrams_helper(
+                    # Recursively generate solutions for remaining letters
+                    for sub_solution in self._find_anagrams_generator(
                         self._freq_map_to_tuple(new_freq),
                         words_limit - 1
-                    )
-                    # Add current word to each sub-solution
-                    for sub_solution in sub_solutions:
-                        solutions.add((word,) + sub_solution)
-        
-        return frozenset(solutions)
+                    ):
+                        yield (word,) + sub_solution
     
-    def find_anagrams(self, letters: str, max_words: int = 5) -> List[Solution]:
+    def find_anagrams(self, letters: str, max_words: int = 5) -> Iterator[Solution]:
         """
-        Find all valid multi-word anagrams for the given letters using optimized algorithms.
+        Lazily generate all valid multi-word anagrams for the given letters.
+        
+        This is a generator function that yields one solution at a time, avoiding
+        the need to compute and store all solutions at once. It uses the
+        _find_anagrams_generator helper which implements the core recursive logic.
+        
+        Performance optimizations:
+        1. Input normalization and frequency map computation done once up front
+        2. Generator-based lazy evaluation to avoid storing all solutions in memory
+        3. Early filtering of single-word solutions that match the input
+        4. Precomputed word frequency maps from __init__
         
         Args:
             letters: Input string of Hebrew letters
             max_words: Maximum number of words in each anagram
             
-        Returns:
-            List of anagram solutions, where each solution is a list of words
+        Yields:
+            Each anagram solution as a list of words, one at a time
         """
-        # Remove spaces and normalize
+        # Remove spaces and normalize the input once
         normalized = self.dictionary.normalize_word(letters.replace(' ', ''))
         target_freq = self.dictionary.get_word_frequency_map(normalized)
         target_tuple = self._freq_map_to_tuple(target_freq)
         
-        # Clear the LRU cache to avoid memory issues between runs
-        self._find_anagrams_helper.cache_clear()
-        
-        # Get all solutions as tuples
-        solution_tuples = self._find_anagrams_helper(target_tuple, max_words)
-        
-        # Convert solutions to lists and filter out empty solutions
-        solutions = [list(solution) for solution in solution_tuples if solution]
-        
-        # Filter out solutions that are just the original input
-        solutions = [
-            solution for solution in solutions 
-            if not (len(solution) == 1 and 
-                   self.dictionary.normalize_word(solution[0]) == normalized)
-        ]
-        
-        # Sort solutions for consistent ordering
-        solutions.sort(key=lambda x: (len(x), x))
-        
-        return solutions
+        # Use the generator to yield solutions one at a time
+        # This is memory efficient as it only keeps one solution in memory at a time
+        for solution in self._find_anagrams_generator(target_tuple, max_words):
+            # Skip solutions that are just the original input
+            # This avoids returning trivial solutions
+            if len(solution) == 1 and self.dictionary.normalize_word(solution[0]) == normalized:
+                continue
+            yield list(solution)
