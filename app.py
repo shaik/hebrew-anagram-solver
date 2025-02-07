@@ -33,6 +33,9 @@ def solve():
         - error: error message if any
     """
     try:
+        import time
+        start_time = time.time()
+        
         data = request.get_json()
         letters = data.get('letters', '').strip()
         # Limit max_words to 4
@@ -43,9 +46,12 @@ def solve():
             return jsonify({'error': 'No input provided'}), 400
             
         solutions = solver.find_anagrams(letters, max_words)
+        elapsed_time = round((time.time() - start_time) * 1000)  # Convert to milliseconds
+        
         return jsonify({
             'solutions': solutions,
-            'count': len(solutions)
+            'count': len(solutions),
+            'elapsed_ms': elapsed_time
         })
         
     except Exception as e:

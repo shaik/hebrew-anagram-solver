@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loading.classList.remove('d-none');
         results.classList.add('d-none');
         errorDiv.classList.add('d-none');
+        document.getElementById('searchStats').classList.add('d-none');
         solutionsList.innerHTML = '';
         
         const letters = document.getElementById('letters').value.trim();
@@ -32,6 +33,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
             
             if (response.ok) {
+                // Update search stats
+                const statsDiv = document.getElementById('searchStats');
+                statsDiv.textContent = `נמצאו ${data.count} תוצאות ב-${data.elapsed_ms} אלפיות שנייה`;
+                statsDiv.classList.remove('d-none');
+                
                 if (data.solutions.length > 0) {
                     data.solutions.forEach(solution => {
                         const item = document.createElement('div');
