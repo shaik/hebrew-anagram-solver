@@ -2,6 +2,54 @@
 
 A Flask web application that finds multi-word anagrams from Hebrew input, handling final letter forms and providing a beautiful, responsive UI.
 
+## About This Project
+
+This project was developed using an innovative approach where ChatGPT (GPT-3.5-turbo-0125) was used to generate prompts for Windsurf, a powerful AI coding assistant. This two-stage prompt engineering process allowed for more precise and effective code generation.
+
+### Example Prompts
+
+1. Initial prompt to ChatGPT:
+```
+I want to create a Hebrew anagram solver using Python and Flask. Generate a prompt for Windsurf that will help create this application. The prompt should specify:
+- Handling Hebrew final letters (ך, ם, ן, ף, ץ)
+- Finding all possible word combinations
+- Using a dictionary file for valid words
+- Creating a beautiful web interface
+```
+
+2. ChatGPT generated this refined prompt for Windsurf:
+```
+Create a Hebrew anagram solver web application using Flask with the following specifications:
+
+1. Core Features:
+   - Load a Hebrew dictionary from a UTF-8 text file
+   - Implement a function to normalize Hebrew final letters (ך->כ, ם->מ, etc.)
+   - Create an efficient algorithm to find all valid word combinations
+   - Support multi-word anagrams up to 4 words
+
+2. Web Interface:
+   - Clean, modern design with RTL support
+   - Input field for Hebrew text
+   - Display results in a clear, organized manner
+   - Add loading indicator for longer queries
+
+3. Implementation Details:
+   - Use recursive backtracking with memoization
+   - Precompute frequency maps for dictionary words
+   - Handle edge cases (empty input, no solutions)
+   - Add comprehensive test suite
+```
+
+3. For optimizations, another prompt to ChatGPT:
+```
+Generate a prompt for Windsurf to optimize the anagram solver by:
+- Using lru_cache for memoization
+- Improving the frequency map comparisons
+- Adding proper test cases for edge cases
+```
+
+This iterative process of using ChatGPT to refine prompts for Windsurf resulted in high-quality, optimized code with proper error handling and test coverage.
+
 ## Features
 
 - Finds all possible combinations of Hebrew words that form anagrams
