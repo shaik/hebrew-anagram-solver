@@ -3,16 +3,37 @@ Main Flask application for the Hebrew anagram solver.
 Provides web interface and API endpoints for solving anagrams with pagination support.
 """
 import os
+import re
 import uuid
+import logging
 from time import time
-from typing import List, Iterator, Optional
+from typing import List, Iterator, Optional, Dict
 from dataclasses import dataclass
 from flask import Flask, render_template, request, jsonify, session
+from flask_wtf.csrf import CSRFProtect
 from anagram.dictionary import HebrewDictionary
 from anagram.solver import AnagramSolver
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize Flask app with security settings
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Required for session management
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'your-secret-key-here')
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
+
+# Initialize CSRF protection
+csrf = CSRFProtect(app)
+
+# Hebrew letter validation regex
+HEBREW_LETTERS_REGEX = re.compile(r'^[\u0590-\u05FF\s]+$')  # Only Hebrew letters and spaces allowed
+
+def is_valid_hebrew_text(text: str) -> bool:
+    """Validate that text contains only Hebrew letters and spaces."""
+    return bool(HEBREW_LETTERS_REGEX.match(text))
 
 # Initialize the dictionary and solver
 dict_path = os.path.join(os.path.dirname(__file__), 'data', 'hebrew_dict.txt')
@@ -57,7 +78,26 @@ def index():
     """Render the main page with the anagram solver interface."""
     return render_template('index.html')
 
+@app.after_request
+def set_security_headers(response):
+    """Add security headers to all responses."""
+    # Allow Bootstrap CDN and other required resources
+    csp = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net",
+        "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net",
+        "font-src 'self' cdn.jsdelivr.net",
+        "img-src 'self' data: blob:"
+    ]
+    response.headers['Content-Security-Policy'] = "; ".join(csp)
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
+
 @app.route('/solve', methods=['POST'])
+@csrf.exempt  # Exempt API endpoint from CSRF as it uses JSON
 def solve():
     """
     API endpoint for solving anagrams with pagination support.
@@ -84,12 +124,51 @@ def solve():
     try:
         # Parse and validate input parameters
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid JSON data'}), 400
         
-        # Validate search parameters
-        letters = data.get('letters', '').strip()
-        requested_max_words = int(data.get('max_words', 4))
-        max_words = min(requested_max_words, 4)  # Ensure it never exceeds 4
         search_id = data.get('search_id')
+        
+        # For subsequent page requests, we only need search_id
+        if not search_id:
+            # Initial request validation
+            letters = data.get('letters')
+            if not letters or not isinstance(letters, str):
+                return jsonify({'error': 'Letters field is required'}), 400
+            
+            letters = letters.strip()
+            if not letters:
+                return jsonify({'error': 'Letters field cannot be empty'}), 400
+            if not is_valid_hebrew_text(letters):
+                return jsonify({'error': 'Invalid input. Only Hebrew letters are allowed.'}), 400
+                
+            # Validate must-have word if present
+            mhw = data.get('mhw', '')
+            if mhw:
+                if not isinstance(mhw, str):
+                    return jsonify({'error': 'Must-have word must be a string'}), 400
+                mhw = mhw.strip()
+                if mhw and not is_valid_hebrew_text(mhw):
+                    return jsonify({'error': 'Invalid must-have word. Only Hebrew letters are allowed.'}), 400
+            else:
+                mhw = ''
+
+            try:
+                requested_max_words = int(data.get('max_words', 4))
+                if requested_max_words < 1:
+                    return jsonify({'error': 'max_words must be at least 1'}), 400
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Invalid max_words value'}), 400
+                
+            max_words = min(requested_max_words, 4)  # Ensure it never exceeds 4
+        else:
+            # For subsequent pages, use values from cache
+            if search_id not in search_cache:
+                return jsonify({'error': 'Invalid or expired search_id'}), 400
+            cache_entry = search_cache[search_id]
+            letters = cache_entry.get('letters', '')
+            mhw = cache_entry.get('mhw', '')
+            max_words = cache_entry.get('max_words', 4)
         
         # Validate pagination parameters
         try:

@@ -103,7 +103,9 @@ document.addEventListener('DOMContentLoaded', function() {
         results.classList.add('d-none');
         errorDiv.classList.add('d-none');
         document.getElementById('searchStats').classList.add('d-none');
-        solutionsList.innerHTML = '';
+        while (solutionsList.firstChild) {
+            solutionsList.removeChild(solutionsList.firstChild);
+        }
         
         try {
             const response = await fetch('/solve', {
