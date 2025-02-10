@@ -173,14 +173,19 @@ class AnagramSolver:
         
         # If must_have_word is provided, validate and subtract its letters
         if must_have_word:
-            # Normalize the must-have word
-            mhw_normalized = self.dictionary.normalize_word(must_have_word.strip())
+            # Normalize both the must-have word and store original for display
+            original_mhw = must_have_word.strip()
+            mhw_normalized = self.dictionary.normalize_word(original_mhw)
+            
+            # Get frequency maps for normalized versions
             mhw_freq = self.dictionary.get_word_frequency_map(mhw_normalized)
             
             # Verify that must_have_word's letters are a subset of input letters
+            # This comparison is now done on normalized forms, so מ and ם are treated as equivalent
             for char, freq in mhw_freq.items():
                 if char not in target_freq or target_freq[char] < freq:
-                    raise ValueError('Must-have word contains letters not present in input')
+                    # Provide a more specific error message in Hebrew
+                    raise ValueError('המילה חייבת להיות מורכבת מהאותיות שהוזנו')
             
             # Subtract must_have_word's letters from target frequency map
             remaining_freq = {}
@@ -197,8 +202,8 @@ class AnagramSolver:
                 # Skip solutions that are just the original input minus must_have_word
                 if len(solution) == 1 and self.dictionary.normalize_word(solution[0]) == self.dictionary.normalize_word(''.join(remaining_freq.keys())):
                     continue
-                # Append must_have_word to each solution
-                yield list(solution) + [must_have_word]
+                # Append original must-have word (with proper final forms) to each solution
+                yield list(solution) + [original_mhw]
         else:
             # Standard case without must_have_word
             target_tuple = self._freq_map_to_tuple(target_freq)

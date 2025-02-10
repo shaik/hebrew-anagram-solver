@@ -44,17 +44,17 @@ def test_freq_map_subset(solver):
 
 def test_single_word_anagram(solver):
     """Test finding single-word anagrams."""
-    solutions = solver.find_anagrams("ספר", max_words=1)
+    solutions = list(solver.find_anagrams("ספר", max_words=1))
     assert len(solutions) == 2  # פרס, רפס (original input ספר is excluded)
     assert ["פרס"] in solutions
     assert ["רפס"] in solutions
 
 def test_no_solutions(solver):
     """Test when no solutions exist."""
-    solutions = solver.find_anagrams("טסט")
+    solutions = list(solver.find_anagrams("טסט"))
     assert len(solutions) == 0
 
 def test_final_forms(solver):
     """Test handling of final forms."""
-    solutions = solver.find_anagrams("ספר")
+    solutions = list(solver.find_anagrams("ספר"))
     assert len(solutions) == 2  # Should find same solutions regardless of final forms, excluding original input

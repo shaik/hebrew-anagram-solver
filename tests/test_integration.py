@@ -40,7 +40,7 @@ def test_real_dictionary_anagrams():
     solver = AnagramSolver(dictionary)
     
     # Test חתול -> לחות (original input should be excluded)
-    solutions = solver.find_anagrams("חתול")
+    solutions = list(solver.find_anagrams("חתול"))
     logger.info(f"Found {len(solutions)} anagrams for 'חתול'")
     for solution in solutions:
         logger.info(f"Solution: {' '.join(solution)}")
@@ -51,7 +51,7 @@ def test_real_dictionary_anagrams():
     # Test with various space patterns
     space_patterns = ["חת ול", "ח תול", "חתו ל", "ח ת ו ל"]
     for pattern in space_patterns:
-        solutions_with_spaces = solver.find_anagrams(pattern)
+        solutions_with_spaces = list(solver.find_anagrams(pattern))
         logger.info(f"Found {len(solutions_with_spaces)} anagrams for '{pattern}'")
         for solution in solutions_with_spaces:
             logger.info(f"Solution: {' '.join(solution)}")
@@ -60,7 +60,7 @@ def test_real_dictionary_anagrams():
         assert len(solutions_with_spaces) == 1, f"Only 'לחות' should be found for '{pattern}'"
     
     # Test reverse: לחות -> חתול
-    solutions_reverse = solver.find_anagrams("לחות")
+    solutions_reverse = list(solver.find_anagrams("לחות"))
     logger.info(f"Found {len(solutions_reverse)} anagrams for 'לחות'")
     for solution in solutions_reverse:
         logger.info(f"Solution: {' '.join(solution)}")

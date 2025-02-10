@@ -1,3 +1,26 @@
+// Mapping of Hebrew final forms to their base forms and vice versa
+const FINAL_FORMS = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
+const BASE_FORMS = { 'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ' };
+
+// Function to get equivalent characters (base & final forms)
+function getEquivalentCharacters(char) {
+    const equivalents = new Set([char]);
+    if (FINAL_FORMS[char]) equivalents.add(FINAL_FORMS[char]);
+    if (BASE_FORMS[char]) equivalents.add(BASE_FORMS[char]);
+    return equivalents;
+}
+
+// Function to create a frequency map, considering final & base forms as interchangeable
+function createFrequencyMap(word) {
+    const freqMap = {};
+    for (const char of word) {
+        for (const equivalent of getEquivalentCharacters(char)) {
+            freqMap[equivalent] = (freqMap[equivalent] || 0) + 1;
+        }
+    }
+    return freqMap;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('anagramForm');
     const loading = document.getElementById('loading');
@@ -8,28 +31,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const nextButton = document.getElementById('nextPage');
     const pageInfo = document.getElementById('pageInfo');
     
-    // Function to check if all letters in mhw are present in the main input
+    // Function to check if all letters in mhw exist in letters, treating final & base forms equally
     function validateMustHaveWord(letters, mhw) {
-        if (!mhw) return true; // Empty mhw is valid
-        
-        // Create frequency maps for both strings
-        const lettersFreq = {};
-        const mhwFreq = {};
-        
-        // Count frequencies in main input
-        for (const char of letters) {
-            lettersFreq[char] = (lettersFreq[char] || 0) + 1;
-        }
-        
-        // Count frequencies in must-have word
-        for (const char of mhw) {
-            mhwFreq[char] = (mhwFreq[char] || 0) + 1;
-            // If letter not in main input or frequency exceeds main input
+        if (!mhw) return true; // Empty mhw is always valid
+
+        // Create frequency maps that consider final and base forms as equivalent
+        const lettersFreq = createFrequencyMap(letters);
+        const mhwFreq = createFrequencyMap(mhw);
+
+        // Check if mhw frequencies are a subset of letters frequencies
+        for (const char in mhwFreq) {
             if (!lettersFreq[char] || mhwFreq[char] > lettersFreq[char]) {
                 return false;
             }
         }
-        
+
         return true;
     }
 
