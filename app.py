@@ -11,6 +11,8 @@ from typing import List, Iterator, Optional, Dict
 from dataclasses import dataclass
 from flask import Flask, render_template, request, jsonify, session
 from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from anagram.dictionary import HebrewDictionary
 from anagram.solver import AnagramSolver
 
@@ -27,6 +29,15 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
 
 # Initialize CSRF protection
 csrf = CSRFProtect(app)
+
+# Initialize rate limiter
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,  # Use client IP for rate limiting
+    default_limits=["200 per day", "50 per hour"],  # Default limits for all routes
+    storage_uri="memory://",  # Use in-memory storage for rate limiting
+    strategy="fixed-window"  # Use fixed time window for rate counting
+)
 
 # Hebrew letter validation regex
 HEBREW_LETTERS_REGEX = re.compile(r'^[\u0590-\u05FF\s]+$')  # Only Hebrew letters and spaces allowed
@@ -78,7 +89,14 @@ def index():
     """Render the main page with the anagram solver interface."""
     return render_template('index.html')
 
-@app.after_request
+@app.errorhandler(429)  # Handle rate limit exceeded errors
+def ratelimit_handler(e):
+    """Return JSON response for rate limit exceeded."""
+    return jsonify({
+        'error': 'Rate limit exceeded. Please try again later.',
+        'retry_after': e.description
+    }), 429
+
 def set_security_headers(response):
     """Add security headers to all responses."""
     # Allow Bootstrap CDN and other required resources
@@ -98,6 +116,7 @@ def set_security_headers(response):
 
 @app.route('/solve', methods=['POST'])
 @csrf.exempt  # Exempt API endpoint from CSRF as it uses JSON
+@limiter.limit("5 per second; 100 per minute")  # Specific limits for /solve endpoint
 def solve():
     """
     API endpoint for solving anagrams with pagination support.
