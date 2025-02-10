@@ -15,6 +15,15 @@ class HebrewDictionary:
         'ץ': 'צ'
     }
     
+    # Reverse mapping of base forms to their final forms
+    BASE_TO_FINAL = {
+        'כ': 'ך',
+        'מ': 'ם',
+        'נ': 'ן',
+        'פ': 'ף',
+        'צ': 'ץ'
+    }
+    
     def __init__(self, dict_path: str):
         """
         Initialize the Hebrew dictionary from a file.
@@ -83,3 +92,24 @@ class HebrewDictionary:
         for char in normalized:
             freq_map[char] = freq_map.get(char, 0) + 1
         return freq_map
+        
+    def restore_final_forms(self, word: str) -> str:
+        """
+        Restore final forms in a Hebrew word by converting base forms to final forms
+        when they appear at the end of the word.
+        
+        Args:
+            word: Hebrew word to process
+            
+        Returns:
+            Word with final forms restored at word endings
+        """
+        if not word:
+            return word
+            
+        # Check if the last letter should be a final form
+        last_letter = word[-1]
+        if last_letter in self.BASE_TO_FINAL:
+            return word[:-1] + self.BASE_TO_FINAL[last_letter]
+            
+        return word

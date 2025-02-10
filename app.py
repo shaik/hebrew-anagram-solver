@@ -139,6 +139,12 @@ def solve():
         end_idx = start_idx + per_page
         page_solutions = cache.solutions[start_idx:end_idx]
         
+        # Restore final forms for display
+        page_solutions = [
+            [dictionary.restore_final_forms(word) for word in solution]
+            for solution in page_solutions
+        ]
+        
         # Clean up old caches (older than 1 hour)
         current_time = time()
         old_searches = [sid for sid, c in solution_caches.items() 
