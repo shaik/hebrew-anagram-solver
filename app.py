@@ -182,12 +182,12 @@ def solve():
             max_words = min(requested_max_words, 4)  # Ensure it never exceeds 4
         else:
             # For subsequent pages, use values from cache
-            if search_id not in search_cache:
+            if search_id not in solution_caches:
                 return jsonify({'error': 'Invalid or expired search_id'}), 400
-            cache_entry = search_cache[search_id]
-            letters = cache_entry.get('letters', '')
-            mhw = cache_entry.get('mhw', '')
-            max_words = cache_entry.get('max_words', 4)
+            cache_entry = solution_caches[search_id]
+            letters = cache_entry.letters
+            mhw = cache_entry.mhw or ''
+            max_words = cache_entry.max_words
         
         # Validate pagination parameters
         try:
