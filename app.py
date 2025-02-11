@@ -36,7 +36,8 @@ limiter = Limiter(
     key_func=get_remote_address,  # Use client IP for rate limiting
     default_limits=["200 per day", "50 per hour"],  # Default limits for all routes
     storage_uri="memory://",  # Use in-memory storage for rate limiting
-    strategy="fixed-window"  # Use fixed time window for rate counting
+    strategy="fixed-window",  # Use fixed time window for rate counting
+    enabled=not app.config.get('TESTING', False)  # Disable rate limiting during tests
 )
 
 # Hebrew letter validation regex
@@ -116,7 +117,7 @@ def set_security_headers(response):
 
 @app.route('/solve', methods=['POST'])
 @csrf.exempt  # Exempt API endpoint from CSRF as it uses JSON
-@limiter.limit("5 per second; 100 per minute")  # Specific limits for /solve endpoint
+@limiter.limit("5 per second; 100 per minute", exempt_when=lambda: app.config.get('TESTING', False))  # Specific limits for /solve endpoint
 def solve():
     """
     API endpoint for solving anagrams with pagination support.
