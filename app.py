@@ -30,9 +30,24 @@ app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
 
-# Configure Flask-Session with Redis
-app.config['SESSION_TYPE'] = 'redis'
-app.config['SESSION_REDIS'] = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+# Configure Flask-Session
+is_production = bool(os.environ.get('REDIS_URL'))
+
+if is_production:
+    # Use Redis in production (Heroku)
+    app.config.update(
+        SESSION_TYPE='redis',
+        SESSION_REDIS=redis.from_url(os.environ['REDIS_URL'])
+    )
+else:
+    # Use filesystem in development
+    session_dir = os.path.join(os.path.dirname(__file__), 'flask_sessions')
+    os.makedirs(session_dir, exist_ok=True)
+    app.config.update(
+        SESSION_TYPE='filesystem',
+        SESSION_FILE_DIR=session_dir
+    )
+
 Session(app)
 
 # Initialize CSRF protection
@@ -98,9 +113,6 @@ class SolutionCache:
             self._generator = None
             
         return len(self.solutions) >= count
-
-# Ensure session directory exists
-os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
 
 @app.route('/')
 def index():
