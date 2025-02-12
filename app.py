@@ -35,10 +35,18 @@ is_production = bool(os.environ.get('REDIS_URL'))
 
 if is_production:
     # Use Redis in production (Heroku)
-    app.config.update(
-        SESSION_TYPE='redis',
-        SESSION_REDIS=redis.from_url(os.environ['REDIS_URL'])
-    )
+    redis_url = os.environ['REDIS_URL']
+    if redis_url.startswith('rediss://'):
+        # Handle SSL Redis connections
+        app.config.update(
+            SESSION_TYPE='redis',
+            SESSION_REDIS=redis.from_url(redis_url, ssl_cert_reqs=None)
+        )
+    else:
+        app.config.update(
+            SESSION_TYPE='redis',
+            SESSION_REDIS=redis.from_url(redis_url)
+        )
 else:
     # Use filesystem in development
     session_dir = os.path.join(os.path.dirname(__file__), 'flask_sessions')
