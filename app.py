@@ -6,6 +6,7 @@ import os
 import re
 import uuid
 import logging
+import pickle
 from time import time
 from typing import List, Iterator, Optional, Dict
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ from flask import Flask, render_template, request, jsonify, session
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_session import Session
 from anagram.dictionary import HebrewDictionary
 from anagram.solver import AnagramSolver
 
@@ -26,6 +28,11 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'your-secret-key-here')
 app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour
+
+# Configure Flask-Session
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = os.path.join(os.path.dirname(__file__), 'flask_sessions')
+Session(app)
 
 # Initialize CSRF protection
 csrf = CSRFProtect(app)
@@ -52,38 +59,47 @@ dict_path = os.path.join(os.path.dirname(__file__), 'data', 'hebrew_dict.txt')
 dictionary = HebrewDictionary(dict_path)
 solver = AnagramSolver(dictionary)
 
-# In-memory cache for pagination
+# Solution cache for pagination
 class SolutionCache:
     def __init__(self, letters: str, max_words: int, mhw: Optional[str] = None):
         self.letters = letters
         self.max_words = max_words
         self.mhw = mhw
         self.solutions: List[List[str]] = []
-        self.generator: Optional[Iterator[List[str]]] = None
+        self._generator: Optional[Iterator[List[str]]] = None
         self.is_complete = False
         self.created_at = time()
+
+    def __getstate__(self):
+        """Return state for pickling, excluding the generator."""
+        state = self.__dict__.copy()
+        state['_generator'] = None
+        return state
+
+    def __setstate__(self, state):
+        """Restore state from pickle, recreating generator if needed."""
+        self.__dict__.update(state)
+        self._generator = None  # Will be recreated when needed
         
     def ensure_solutions(self, count: int) -> bool:
         """Ensure we have at least count solutions, if possible."""
         if self.is_complete or len(self.solutions) >= count:
             return True
             
-        if self.generator is None:
-            self.generator = solver.find_anagrams(self.letters, self.max_words, self.mhw)
+        if self._generator is None:
+            self._generator = solver.find_anagrams(self.letters, self.max_words, self.mhw)
             
         try:
             while len(self.solutions) < count:
-                self.solutions.append(next(self.generator))
+                self.solutions.append(next(self._generator))
         except StopIteration:
             self.is_complete = True
-            self.generator = None
+            self._generator = None
             
         return len(self.solutions) >= count
 
-# Global cache of active searches
-from typing import Dict
-
-solution_caches: Dict[str, SolutionCache] = {}
+# Ensure session directory exists
+os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
 
 @app.route('/')
 def index():
@@ -159,6 +175,12 @@ def solve():
             letters = letters.strip()
             if not letters:
                 return jsonify({'error': 'Letters field cannot be empty'}), 400
+            
+            # Remove spaces as they are redundant
+            letters_no_spaces = letters.replace(' ', '')
+            if len(letters_no_spaces) > 14:
+                return jsonify({'error': 'Input cannot be longer than 14 characters (excluding spaces)'}), 400
+                
             if not is_valid_hebrew_text(letters):
                 return jsonify({'error': 'Invalid input. Only Hebrew letters are allowed.'}), 400
                 
@@ -182,10 +204,11 @@ def solve():
                 
             max_words = min(requested_max_words, 4)  # Ensure it never exceeds 4
         else:
-            # For subsequent pages, use values from cache
-            if search_id not in solution_caches:
+            # For subsequent pages, use values from session
+            session_key = f'search_{search_id}'
+            if session_key not in session:
                 return jsonify({'error': 'Invalid or expired search_id'}), 400
-            cache_entry = solution_caches[search_id]
+            cache_entry = pickle.loads(session[session_key])
             letters = cache_entry.letters
             mhw = cache_entry.mhw or ''
             max_words = cache_entry.max_words
@@ -217,26 +240,36 @@ def solve():
                 mhw = None
                 
         # Get or create cache for this search
-        if search_id and search_id in solution_caches:
-            cache = solution_caches[search_id]
+        session_key = f'search_{search_id}' if search_id else None
+        if session_key and session_key in session:
+            cache = pickle.loads(session[session_key])
         else:
             search_id = str(uuid.uuid4())
+            session_key = f'search_{search_id}'
             try:
                 cache = SolutionCache(letters, max_words, mhw)
-                solution_caches[search_id] = cache
             except ValueError as e:
                 return jsonify({
                     'error': 'המילה חייבת להיות מורכבת מהאותיות שהוזנו'
                 }), 400
             
-        # Calculate required number of solutions
+        # Calculate required number of solutions for this page
         required_solutions = page * per_page
         cache.ensure_solutions(required_solutions)
         
         # Get the slice for current page
         start_idx = (page - 1) * per_page
-        end_idx = start_idx + per_page
-        page_solutions = cache.solutions[start_idx:end_idx]
+        # If start_idx is beyond our total solutions and we're complete,
+        # return an empty list
+        if start_idx >= len(cache.solutions) and cache.is_complete:
+            page_solutions = []
+        else:
+            end_idx = min(start_idx + per_page, len(cache.solutions))
+            page_solutions = cache.solutions[start_idx:end_idx]
+        
+        # Store updated cache in session
+        session[session_key] = pickle.dumps(cache)
+        session.modified = True
         
         # Restore final forms for display
         page_solutions = [
@@ -244,12 +277,17 @@ def solve():
             for solution in page_solutions
         ]
         
-        # Clean up old caches (older than 1 hour)
+        # Clean up old searches from session (older than 1 hour)
         current_time = time()
-        old_searches = [sid for sid, c in solution_caches.items() 
-                       if current_time - c.created_at > 3600]
-        for sid in old_searches:
-            del solution_caches[sid]
+        session_keys = list(session.keys())
+        for key in session_keys:
+            if key.startswith('search_'):
+                try:
+                    cache = pickle.loads(session[key])
+                    if current_time - cache.created_at > 3600:
+                        session.pop(key)
+                except (pickle.UnpicklingError, KeyError):
+                    session.pop(key, None)
         
         return jsonify({
             'solutions': page_solutions,

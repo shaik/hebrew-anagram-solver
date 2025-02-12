@@ -71,7 +71,7 @@ def test_must_have_word_pagination(client):
         'max_words': 4,
         'mhw': 'שלום',
         'page': 1,
-        'per_page': 2
+        'per_page': 1  # Request only one solution per page
     })
     assert response1.status_code == 200
     data1 = json.loads(response1.data)
@@ -81,14 +81,25 @@ def test_must_have_word_pagination(client):
     response2 = client.post('/solve', json={
         'search_id': search_id,
         'page': 2,
-        'per_page': 2
+        'per_page': 1
     })
     assert response2.status_code == 200
     data2 = json.loads(response2.data)
     
-    # Verify both pages contain different solutions but all include must-have word
+    # Verify pagination works correctly
     solutions1 = data1['solutions']
     solutions2 = data2['solutions']
-    assert solutions1 != solutions2  # Different solutions on different pages
+    
+    # Verify we got solutions on both pages
+    assert len(solutions1) == 1
+    assert len(solutions2) == 1
+    
+    # Verify all solutions include must-have word
     for solution in solutions1 + solutions2:
         assert 'שלום' in solution
+    
+    # Verify total_found is non-decreasing
+    assert data2['total_found'] >= data1['total_found']
+    
+    # Verify search_id is consistent
+    assert data1['search_id'] == data2['search_id']

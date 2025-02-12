@@ -19,6 +19,9 @@ env/
 .vscode/
 *.swp
 *.swo
+
+# Flask sessions
+flask_sessions/
 .DS_Store
 
 # Local development settings
