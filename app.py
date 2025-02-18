@@ -112,22 +112,39 @@ class SolutionCache:
         self.__dict__.update(state)
         self._generator = None  # Will be recreated when needed
         
-    def ensure_solutions(self, count: int) -> bool:
-        """Ensure we have at least count solutions, if possible."""
-        if self.is_complete or len(self.solutions) >= count:
+    def ensure_solutions(self, total_required: int) -> bool:
+        """Generate solutions until reaching the total required count."""
+        if self.is_complete or len(self.solutions) >= total_required:
             return True
-            
+
+        # If the generator was lost (or never created), reinitialize it and fast-forward
         if self._generator is None:
-            self._generator = solver.find_anagrams(self.letters, self.max_words, self.mhw)
-            
+            self._generator = solver.find_anagrams(
+                self.letters, 
+                self.max_words, 
+                self.mhw
+            )
+            # Fast-forward: Skip already generated solutions
+            for _ in range(len(self.solutions)):
+                try:
+                    next(self._generator)
+                except StopIteration:
+                    self.is_complete = True
+                    self._generator = None
+                    return len(self.solutions) >= total_required
+
         try:
-            while len(self.solutions) < count:
-                self.solutions.append(next(self._generator))
+            # Continue generating new solutions until we reach the requested count
+            while len(self.solutions) < total_required:
+                new_solution = next(self._generator)
+                # Avoid duplicates
+                if new_solution not in self.solutions:
+                    self.solutions.append(new_solution)
         except StopIteration:
             self.is_complete = True
             self._generator = None
-            
-        return len(self.solutions) >= count
+
+        return len(self.solutions) >= total_required
 
 @app.route('/')
 def index():
